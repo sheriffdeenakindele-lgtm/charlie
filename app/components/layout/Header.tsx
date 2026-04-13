@@ -203,7 +203,7 @@ export default function Header() {
 
                         {/* Unified dropdown: history OR live results */}
                         {showDropdown && (
-                            <div className="absolute top-full left-0 right-0 mt-2 bg-[#0d1b1e] border border-[#1a2f35] rounded-xl shadow-2xl overflow-hidden z-50 search-results">
+                            <div className="absolute top-full right-0 mt-2 bg-[#0d1b1e] border border-[#1a2f35] rounded-xl shadow-2xl overflow-hidden z-50 search-results w-screen max-w-[min(320px,calc(100vw-2rem))] md:left-0 md:right-0 md:w-auto md:max-w-none">
 
                                 {/* Recent searches — shown when query is empty */}
                                 {showHistory && (
