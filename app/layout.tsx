@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./styles/globals.css";
+import Providers from "./providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -56,7 +57,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0a1214] text-white font-[family-name:var(--font-geist-sans)] h-full w-full m-0 p-0`}
       >
-        <div className="page-transition">{children}</div>
+        <Providers>
+          <div className="page-transition">{children}</div>
+        </Providers>
       </body>
     </html>
   );

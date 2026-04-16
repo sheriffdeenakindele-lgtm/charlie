@@ -15,7 +15,7 @@ import { getWeatherTheme } from './lib/weatherTheme';
 export default function Home() {
   const [location, setLocation] = useState({ lat: 51.5072, lon: -0.1276, city: 'London, UK' });
   const [isCurrentLocation, setIsCurrentLocation] = useState(false);
-  const { data: weather, loading, error, refetch } = useWeather(location.lat, location.lon);
+  const { data: weather, loading, fetching, error } = useWeather(location.lat, location.lon);
   const [toast, setToast] = useState<string | null>(null);
 
   const showError = (message: string) => {
@@ -32,7 +32,6 @@ export default function Home() {
           const { name, lat, lon } = JSON.parse(savedCity);
           setLocation({ lat, lon, city: name });
           setIsCurrentLocation(false);
-          refetch(lat, lon);
         } catch {}
       }
       return;
@@ -49,22 +48,20 @@ export default function Home() {
           setLocation({ lat, lon, city: 'Current Location' });
         }
         setIsCurrentLocation(true);
-        refetch(lat, lon);
         localStorage.setItem('currentLocation', JSON.stringify({ lat, lon }));
       },
       () => {
-        // Permission denied or unavailable — fall back to last searched city
+        // Permission denied — fall back to last searched city
         const savedCity = localStorage.getItem('selectedCity');
         if (savedCity) {
           try {
             const { name, lat, lon } = JSON.parse(savedCity);
             setLocation({ lat, lon, city: name });
             setIsCurrentLocation(false);
-            refetch(lat, lon);
           } catch {}
         }
       },
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   }, []);
 
@@ -74,12 +71,11 @@ export default function Home() {
       const { name, lat, lon } = event.detail;
       setLocation({ lat, lon, city: name });
       setIsCurrentLocation(false);
-      refetch(lat, lon);
     };
 
     window.addEventListener('citySelected', handleCitySelected as EventListener);
     return () => window.removeEventListener('citySelected', handleCitySelected as EventListener);
-  }, [refetch]);
+  }, []);
 
   // Get current day of the week
   const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' });
@@ -101,7 +97,6 @@ export default function Home() {
             setLocation({ lat, lon, city: locationName });
             setIsCurrentLocation(true);
             localStorage.setItem('currentLocation', JSON.stringify({ lat, lon }));
-            await refetch(lat, lon);
             resolve();
           } catch (err) {
             showError('Failed to fetch location data. Please try again.');
@@ -142,8 +137,19 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-[#0a1214] flex flex-col">
         <Header />
-        <main className="flex-1 flex items-center justify-center px-4">
-          <div className="text-white text-lg">Loading weather data...</div>
+        <main className="flex-1 max-w-[1400px] mx-auto w-full px-4 md:px-6 py-8">
+          {/* Skeleton for map/location card */}
+          <div className="mb-8 h-48 rounded-2xl bg-[#1a2f35]/60 animate-pulse" />
+
+          {/* Skeleton metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-32 rounded-2xl bg-[#1a2f35]/60 animate-pulse" style={{ animationDelay: `${i * 0.1}s` }} />
+            ))}
+          </div>
+
+          {/* Skeleton forecast */}
+          <div className="h-40 rounded-2xl bg-[#1a2f35]/60 animate-pulse" />
         </main>
         <Footer />
       </div>
@@ -179,6 +185,13 @@ export default function Home() {
       <Header />
 
       <main className="flex-1 max-w-[1400px] mx-auto w-full px-4 md:px-6 py-8">
+        {/* Subtle top bar shown while a background refetch is in progress */}
+        {fetching && (
+          <div className="fixed top-0 left-0 right-0 h-0.5 bg-[#00d4ff]/40 z-[100]">
+            <div className="h-full bg-[#00d4ff] animate-[progress_1.5s_ease-in-out_infinite]" style={{ width: '60%' }} />
+          </div>
+        )}
+
         {/* Map and Location */}
         <div className="mb-8">
           <MapLocationCard

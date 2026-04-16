@@ -11,7 +11,7 @@ import { reverseGeocode } from '../lib/geocoding';
 export default function MapPage() {
   const router = useRouter();
   const [location, setLocation] = useState({ lat: 51.5072, lon: -0.1276, city: 'London, UK' });
-  const { data: weather, loading, refetch } = useWeather(location.lat, location.lon);
+  const { data: weather, loading } = useWeather(location.lat, location.lon);
   const theme = getWeatherTheme(weather?.weatherCode || 0);
 
   // Always attempt geolocation on load — show real location when permission granted
@@ -22,7 +22,6 @@ export default function MapPage() {
         try {
           const { name, lat, lon } = JSON.parse(savedCity);
           setLocation({ lat, lon, city: name });
-          refetch(lat, lon);
         } catch {}
       }
       return;
@@ -38,7 +37,6 @@ export default function MapPage() {
         } catch {
           setLocation({ lat, lon, city: 'Current Location' });
         }
-        refetch(lat, lon);
         localStorage.setItem('currentLocation', JSON.stringify({ lat, lon }));
       },
       () => {
@@ -47,11 +45,10 @@ export default function MapPage() {
           try {
             const { name, lat, lon } = JSON.parse(savedCity);
             setLocation({ lat, lon, city: name });
-            refetch(lat, lon);
           } catch {}
         }
       },
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   }, []);
 
@@ -60,12 +57,11 @@ export default function MapPage() {
     const handleCitySelected = (event: CustomEvent) => {
       const { name, lat, lon } = event.detail;
       setLocation({ lat, lon, city: name });
-      refetch(lat, lon);
     };
 
     window.addEventListener('citySelected', handleCitySelected as EventListener);
     return () => window.removeEventListener('citySelected', handleCitySelected as EventListener);
-  }, [refetch]);
+  }, []);
 
   // Get current time and day
   const currentTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
