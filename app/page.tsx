@@ -5,6 +5,7 @@ import Header from './components/layout/Header';
 import Footer from './components/layout/Footer';
 import MapLocationCard from './components/cards/MapLocationCard';
 import WeatherMetricCard from './components/cards/WeatherMetricCard';
+import HourlyForecast from './components/forecast/HourlyForecast';
 import WeeklyForecast from './components/forecast/WeeklyForecast';
 import Toast from './components/ui/Toast';
 import { useWeather } from './hooks/useWeather';
@@ -12,10 +13,16 @@ import { getWeatherIcon, getWeatherCondition } from './lib/fetchWeather';
 import { reverseGeocode } from './lib/geocoding';
 import { getWeatherTheme } from './lib/weatherTheme';
 
+type LocationState = { lat: number; lon: number; city: string };
+
 export default function Home() {
-  const [location, setLocation] = useState({ lat: 51.5072, lon: -0.1276, city: 'London, UK' });
+  // null = we haven't resolved a location yet → keep showing skeleton
+  const [location, setLocation] = useState<LocationState | null>(null);
   const [isCurrentLocation, setIsCurrentLocation] = useState(false);
-  const { data: weather, loading, fetching, error } = useWeather(location.lat, location.lon);
+  const { data: weather, loading, fetching, error } = useWeather(
+    location?.lat ?? 0,
+    location?.lon ?? 0,
+  );
   const [toast, setToast] = useState<string | null>(null);
 
   const showError = (message: string) => {
@@ -23,19 +30,28 @@ export default function Home() {
     setTimeout(() => setToast(null), 6000);
   };
 
-  // Always attempt geolocation on load — show real location when permission granted
+  // Resolve location on mount — no London flash
   useEffect(() => {
-    if (!navigator.geolocation) {
+    // 1. Seed instantly from localStorage so the skeleton disappears immediately
+    //    on repeat visits, before GPS even responds.
+    const saved = localStorage.getItem('currentLocation');
+    if (saved) {
+      try {
+        const { lat, lon, city } = JSON.parse(saved);
+        if (lat && lon) setLocation({ lat, lon, city: city ?? 'Current Location' });
+      } catch {}
+    } else {
       const savedCity = localStorage.getItem('selectedCity');
       if (savedCity) {
         try {
           const { name, lat, lon } = JSON.parse(savedCity);
           setLocation({ lat, lon, city: name });
-          setIsCurrentLocation(false);
         } catch {}
       }
-      return;
     }
+
+    // 2. Always attempt fresh GPS regardless of cached value
+    if (!navigator.geolocation) return;
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -44,24 +60,28 @@ export default function Home() {
         try {
           const cityName = await reverseGeocode(lat, lon);
           setLocation({ lat, lon, city: cityName });
+          localStorage.setItem('currentLocation', JSON.stringify({ lat, lon, city: cityName }));
         } catch {
           setLocation({ lat, lon, city: 'Current Location' });
+          localStorage.setItem('currentLocation', JSON.stringify({ lat, lon, city: 'Current Location' }));
         }
         setIsCurrentLocation(true);
-        localStorage.setItem('currentLocation', JSON.stringify({ lat, lon }));
       },
       () => {
-        // Permission denied — fall back to last searched city
-        const savedCity = localStorage.getItem('selectedCity');
-        if (savedCity) {
-          try {
-            const { name, lat, lon } = JSON.parse(savedCity);
-            setLocation({ lat, lon, city: name });
-            setIsCurrentLocation(false);
-          } catch {}
-        }
+        // GPS denied — fall back to last searched city if nothing was seeded
+        setLocation(prev => {
+          if (prev) return prev; // already have something from localStorage
+          const savedCity = localStorage.getItem('selectedCity');
+          if (savedCity) {
+            try {
+              const { name, lat, lon } = JSON.parse(savedCity);
+              return { lat, lon, city: name };
+            } catch {}
+          }
+          return prev;
+        });
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
     );
   }, []);
 
@@ -117,6 +137,15 @@ export default function Home() {
     });
   };
 
+  // Transform hourly data for HourlyForecast component
+  const hourlyData = weather?.hourly
+    ? weather.hourly.time.map((time, i) => ({
+        time,
+        temperature: weather.hourly.temperature[i],
+        icon: getWeatherIcon(weather.hourly.weatherCode[i]),
+      }))
+    : [];
+
   // Transform daily forecast data for WeeklyForecast component
   const weeklyData = weather?.daily
     ? weather.daily.time.slice(0, 7).map((date, index) => {
@@ -133,7 +162,8 @@ export default function Home() {
 
   const theme = getWeatherTheme(weather?.weatherCode || 0);
 
-  if (loading) {
+  // Show skeleton until we have a location (first-ever visit before GPS resolves)
+  if (!location || loading) {
     return (
       <div className="min-h-screen bg-[#0a1214] flex flex-col">
         <Header />
@@ -195,7 +225,7 @@ export default function Home() {
         {/* Map and Location */}
         <div className="mb-8">
           <MapLocationCard
-            location={location.city}
+            location={location?.city ?? ''}
             temperature={weather?.temperature || 0}
             condition={weather?.condition || 'Clear'}
             currentDay={currentDay}
@@ -215,6 +245,13 @@ export default function Home() {
             <WeatherMetricCard title="VISIBILITY" value={Math.round(weather?.visibility || 0)} icon="visibility" unit="km" />
           </div>
         </div>
+
+        {/* Hourly Forecast */}
+        {hourlyData.length > 0 && (
+          <div className="mb-12">
+            <HourlyForecast hours={hourlyData} />
+          </div>
+        )}
 
         {/* 7-Day Forecast */}
         {weeklyData.length > 0 && <WeeklyForecast days={weeklyData} />}

@@ -1,41 +1,88 @@
 interface HourlyData {
   time: string;
   temperature: number;
-  icon: string;
+  icon: 'sunny' | 'cloudy' | 'rainy' | 'partly-cloudy' | 'snowy' | 'windy';
 }
 
 interface HourlyForecastProps {
   hours: HourlyData[];
 }
 
+function WeatherIcon({ icon }: { icon: string }) {
+  switch (icon) {
+    case 'sunny':
+      return (
+        <svg className="w-16 h-16 text-[#fbbf24]" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+        </svg>
+      );
+    case 'partly-cloudy':
+      return (
+        <svg className="w-16 h-16 text-[#00d4ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+        </svg>
+      );
+    case 'rainy':
+      return (
+        <svg className="w-16 h-16 text-[#00d4ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 19v2M12 19v2M17 19v2" />
+        </svg>
+      );
+    case 'snowy':
+      return (
+        <svg className="w-16 h-16 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l1-1m0 0l1-1m-1 1h2m-2 0H6" />
+        </svg>
+      );
+    default: // cloudy / windy
+      return (
+        <svg className="w-16 h-16 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M5.5 16a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.977A4.5 4.5 0 1113.5 16h-8z" />
+        </svg>
+      );
+  }
+}
+
 export default function HourlyForecast({ hours }: HourlyForecastProps) {
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-white/80 text-sm font-bold uppercase tracking-widest pl-1">Today</h3>
-        <button className="text-[#fbbf24] text-xs font-bold uppercase hover:text-white transition-colors">
-          Next 24 Hours
-        </button>
+    <div className="animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-white mb-2">Hourly Forecast</h2>
+        <p className="text-gray-400 text-sm">Weather conditions over the next hours.</p>
       </div>
-      <div className="flex overflow-x-auto gap-3 pb-4 -mx-2 px-2 snap-x">
-        {hours.map((hour, index) => (
-          <div
-            key={index}
-            className={`snap-start flex-shrink-0 flex flex-col items-center justify-between rounded-full w-16 h-28 py-4 ${
-              index === 0
-                ? 'bg-[#fbbf24] text-black shadow-[0_0_15px_rgba(251,191,36,0.3)]'
-                : 'bg-[#151725] hover:bg-[#26383c] transition-colors border border-white/5'
-            }`}
-          >
-            <span className={`text-xs font-bold ${index === 0 ? 'text-black' : 'text-[#9db4b9]'}`}>
-              {hour.time}
-            </span>
-            <span className={`material-symbols-outlined text-2xl ${index === 0 ? 'text-black' : 'text-white'}`}>
-              {hour.icon}
-            </span>
-            <span className="text-lg font-bold">{Math.round(hour.temperature)}°</span>
-          </div>
-        ))}
+
+      <div className="relative overflow-hidden">
+        <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scroll-smooth scrollbar-thin scrollbar-thumb-[#1a2f35] scrollbar-track-transparent hover:scrollbar-thumb-[#00d4ff]/50">
+          {hours.map((hour, index) => (
+            <div
+              key={index}
+              className={`snap-start flex-shrink-0 bg-[#0d1b1e] rounded-2xl p-6 border transition-all duration-300 text-center min-w-[180px] hover:scale-105 hover:shadow-2xl hover:shadow-[#00d4ff]/20 hover:-translate-y-2 cursor-pointer group animate-fade-in-scale ${
+                index === 0
+                  ? 'border-[#00d4ff]/50 shadow-lg shadow-[#00d4ff]/10'
+                  : 'border-[#1a2f35] hover:border-[#00d4ff]/50'
+              }`}
+              style={{ animationDelay: `${index * 0.1}s` }}
+            >
+              <h3 className={`font-semibold mb-4 transition-colors group-hover:text-[#00d4ff] ${
+                index === 0 ? 'text-[#00d4ff]' : 'text-white'
+              }`}>
+                {index === 0 ? 'Now' : hour.time}
+              </h3>
+
+              <div className="mb-4 flex justify-center transition-transform group-hover:scale-110 group-hover:rotate-3">
+                <WeatherIcon icon={hour.icon} />
+              </div>
+
+              <div className="mb-2">
+                <div className="text-3xl font-bold text-white transition-all group-hover:text-[#00d4ff] group-hover:scale-110">
+                  {hour.temperature}°C
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

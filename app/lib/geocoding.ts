@@ -57,38 +57,77 @@ export function formatCityName(result: GeocodingResult): string {
   return parts.join(', ');
 }
 
+/**
+ * Reverse geocode coordinates to a human-readable location name.
+ *
+ * Strategy:
+ *  1. BigDataCloud (free, no key) — returns locality (suburb/area) + city separately,
+ *     giving "Lekki, Lagos" style names instead of just "Lagos State".
+ *  2. Nominatim fallback — used if BigDataCloud fails or returns nothing useful.
+ */
 export async function reverseGeocode(lat: number, lon: number): Promise<string> {
+  // ── 1. BigDataCloud ──────────────────────────────────────────────────────
   try {
-    // Use nominatim reverse geocoding
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
+    const bdcRes = await fetch(
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`
     );
 
-    if (!response.ok) {
-      return 'Current Location';
-    }
+    if (bdcRes.ok) {
+      const bdc = await bdcRes.json();
 
-    const data = await response.json();
+      // locality = neighbourhood / suburb / local area (most specific)
+      // city      = the city proper
+      // principalSubdivision = state / province
+      const locality = bdc.locality?.trim();
+      const city     = bdc.city?.trim();
+      const country  = bdc.countryName?.trim();
+
+      // Prefer "Locality, City" if they're different, otherwise just city
+      const localPart = locality && locality !== city ? `${locality}, ${city}` : city;
+
+      if (localPart && country) return `${localPart}, ${country}`;
+      if (localPart)            return localPart;
+      if (city && country)      return `${city}, ${country}`;
+    }
+  } catch {
+    // fall through to Nominatim
+  }
+
+  // ── 2. Nominatim fallback ────────────────────────────────────────────────
+  try {
+    // zoom=14 = suburb/district level — more specific than zoom=10 (city)
+    const nomRes = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=14`
+    );
+
+    if (!nomRes.ok) return 'Current Location';
+
+    const data    = nomRes.ok ? await nomRes.json() : {};
     const address = data.address || {};
-    
-    // Try to build a nice location string
-    const city = address.city || address.town || address.village || address.municipality;
-    const state = address.state;
+
+    const local =
+      address.neighbourhood ||
+      address.suburb        ||
+      address.quarter       ||
+      address.hamlet;
+
+    const city =
+      address.city         ||
+      address.town         ||
+      address.village      ||
+      address.municipality;
+
     const country = address.country;
 
-    if (city && state && country) {
-      return `${city}, ${state}, ${country}`;
-    } else if (city && country) {
-      return `${city}, ${country}`;
-    } else if (state && country) {
-      return `${state}, ${country}`;
-    } else if (country) {
-      return country;
-    }
+    const localPart = local && local !== city ? `${local}, ${city}` : city;
 
-    return 'Current Location';
-  } catch (error) {
-    console.error('Reverse geocoding error:', error);
-    return 'Current Location';
+    if (localPart && country) return `${localPart}, ${country}`;
+    if (localPart)            return localPart;
+    if (address.state && country) return `${address.state}, ${country}`;
+    if (country)              return country;
+  } catch {
+    // both failed
   }
+
+  return 'Current Location';
 }

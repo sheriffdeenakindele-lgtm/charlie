@@ -5,6 +5,71 @@ interface FetchWeatherParams {
   lon: number;
 }
 
+// OpenWeatherMap current weather response shape (only fields we use)
+export interface OWMCurrentResponse {
+  weather: Array<{ id: number; main: string; description: string }>;
+  main: { temp: number; humidity: number };
+  wind: { speed: number };
+  visibility: number; // metres
+  coord: { lat: number; lon: number };
+}
+
+/**
+ * Convert an OpenWeatherMap weather ID to the nearest WMO weather code so
+ * the rest of the app (themes, icons, condition strings) stays consistent.
+ */
+export function owmIdToWmoCode(id: number): number {
+  if (id >= 200 && id < 300) return 95; // thunderstorm
+  if (id >= 300 && id < 400) return 51; // drizzle → light rain
+  if (id >= 500 && id < 600) return 61; // rain
+  if (id >= 600 && id < 700) return 71; // snow
+  if (id >= 700 && id < 800) return 45; // atmosphere (fog, mist, haze…)
+  if (id === 800) return 0;             // clear sky
+  if (id === 801) return 1;             // few clouds
+  if (id === 802) return 2;             // scattered clouds
+  return 3;                             // broken / overcast (803, 804)
+}
+
+/**
+ * Fetch current conditions from our own Next.js API route, which calls
+ * OpenWeatherMap with the API key kept server-side.
+ * Throws if the route returns an error (e.g. key not configured).
+ */
+export async function fetchCurrentWeatherOWM(lat: number, lon: number): Promise<OWMCurrentResponse> {
+  const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to fetch current weather');
+  }
+  return response.json();
+}
+
+// OpenWeatherMap 3-hourly forecast response shape
+export interface OWMForecastEntry {
+  dt: number; // Unix timestamp
+  main: { temp: number; humidity: number };
+  weather: Array<{ id: number }>;
+  wind: { speed: number };
+  dt_txt: string; // "2024-01-15 14:00:00" UTC
+}
+
+export interface OWMForecastResponse {
+  list: OWMForecastEntry[];
+}
+
+/**
+ * Fetch 3-hourly forecast from OWM (next ~27 h, 9 entries).
+ * Each entry covers a 3-hour window, giving station-quality short-term data.
+ */
+export async function fetchHourlyForecastOWM(lat: number, lon: number): Promise<OWMForecastResponse> {
+  const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}&type=forecast`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to fetch hourly forecast');
+  }
+  return response.json();
+}
+
 // Map WMO Weather Codes to condition names
 export function getWeatherCondition(weatherCode: number): string {
   if (weatherCode === 0) return 'Clear';
@@ -40,6 +105,7 @@ export async function fetchWeather({ lat, lon }: FetchWeatherParams): Promise<Op
     hourly: 'temperature_2m,weathercode',
     daily: 'temperature_2m_max,temperature_2m_min,weathercode',
     timezone: 'auto',
+    cell_selection: 'nearest', // snap to nearest grid point for most local result
   });
 
   const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);

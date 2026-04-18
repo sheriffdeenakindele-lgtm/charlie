@@ -1,52 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
+  const { searchParams } = request.nextUrl;
+  const lat = searchParams.get('lat');
+  const lon = searchParams.get('lon');
+  const type = searchParams.get('type') ?? 'current'; // 'current' | 'forecast'
+
+  if (!lat || !lon) {
+    return NextResponse.json({ error: 'lat and lon are required' }, { status: 400 });
+  }
+
+  const apiKey = process.env.OPENWEATHERMAP_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: 'OPENWEATHERMAP_API_KEY not configured' },
+      { status: 503 }
+    );
+  }
+
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const lat = searchParams.get('lat');
-    const lon = searchParams.get('lon');
-    const city = searchParams.get('city');
+    const base = 'https://api.openweathermap.org/data/2.5';
+    const url =
+      type === 'forecast'
+        // cnt=9 → 9 × 3h = 27 h, enough to cover the next full day
+        ? `${base}/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&cnt=9`
+        : `${base}/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
 
-    // TODO: Add your weather API key and endpoint
-    const API_KEY = process.env.WEATHER_API_KEY;
-    
-    if (!API_KEY) {
-      return NextResponse.json(
-        { error: 'Weather API key not configured' },
-        { status: 500 }
-      );
-    }
-
-    let url = '';
-    if (lat && lon) {
-      // Fetch by coordinates
-      url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`;
-    } else if (city) {
-      // Fetch by city name
-      url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=metric`;
-    } else {
-      return NextResponse.json(
-        { error: 'Missing location parameters' },
-        { status: 400 }
-      );
-    }
-
-    const response = await fetch(url);
-    const data = await response.json();
+    const response = await fetch(url, {
+      next: { revalidate: 300 }, // cache on the server for 5 min
+    });
 
     if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
       return NextResponse.json(
-        { error: data.message || 'Failed to fetch weather data' },
+        { error: err.message || 'OpenWeatherMap error' },
         { status: response.status }
       );
     }
 
+    const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Weather API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('OWM fetch error:', error);
+    return NextResponse.json({ error: 'Failed to fetch weather' }, { status: 500 });
   }
 }
