@@ -4,7 +4,6 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const lat = searchParams.get('lat');
   const lon = searchParams.get('lon');
-  const type = searchParams.get('type') ?? 'current'; // 'current' | 'forecast'
 
   if (!lat || !lon) {
     return NextResponse.json({ error: 'lat and lon are required' }, { status: 400 });
@@ -19,12 +18,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const base = 'https://api.openweathermap.org/data/2.5';
-    const url =
-      type === 'forecast'
-        // cnt=9 → 9 × 3h = 27 h, enough to cover the next full day
-        ? `${base}/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&cnt=9`
-        : `${base}/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
 
     const response = await fetch(url, {
       next: { revalidate: 300 }, // cache on the server for 5 min

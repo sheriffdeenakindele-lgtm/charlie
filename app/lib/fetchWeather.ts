@@ -44,31 +44,6 @@ export async function fetchCurrentWeatherOWM(lat: number, lon: number): Promise<
   return response.json();
 }
 
-// OpenWeatherMap 3-hourly forecast response shape
-export interface OWMForecastEntry {
-  dt: number; // Unix timestamp
-  main: { temp: number; humidity: number };
-  weather: Array<{ id: number }>;
-  wind: { speed: number };
-  dt_txt: string; // "2024-01-15 14:00:00" UTC
-}
-
-export interface OWMForecastResponse {
-  list: OWMForecastEntry[];
-}
-
-/**
- * Fetch 3-hourly forecast from OWM (next ~27 h, 9 entries).
- * Each entry covers a 3-hour window, giving station-quality short-term data.
- */
-export async function fetchHourlyForecastOWM(lat: number, lon: number): Promise<OWMForecastResponse> {
-  const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}&type=forecast`);
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || 'Failed to fetch hourly forecast');
-  }
-  return response.json();
-}
 
 // Map WMO Weather Codes to condition names
 export function getWeatherCondition(weatherCode: number): string {

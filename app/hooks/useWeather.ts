@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import {
   fetchWeather,
   fetchCurrentWeatherOWM,
-  fetchHourlyForecastOWM,
   owmIdToWmoCode,
   getWeatherCondition,
   getWeatherIcon,
@@ -39,11 +38,6 @@ export interface WeatherData {
   source: 'hybrid' | 'open-meteo';
 }
 
-/** Format a Unix timestamp as a short local time string like "3 PM" */
-function fmtHour(dt: number): string {
-  return new Date(dt * 1000).toLocaleTimeString([], { hour: 'numeric', hour12: true });
-}
-
 /** Format an Open-Meteo local-time string like "2024-01-15T14:00" as "2 PM" */
 function fmtOmHour(iso: string): string {
   // Append 'Z' would wrongly shift to UTC — treat as local by replacing T with space
@@ -65,41 +59,28 @@ export function useWeather(lat: number, lon: number) {
     retry: false,
   });
 
-  // ── OWM: station-quality 3-hourly forecast (next ~27 h) ──
-  const hourlyOWMQuery = useQuery({
-    queryKey: ['weather-hourly-owm', lat, lon],
-    queryFn: () => fetchHourlyForecastOWM(lat, lon),
-    retry: false,
-  });
-
   const forecast = forecastQuery.data;
   const owm = currentQuery.data;
-  const owmHourly = hourlyOWMQuery.data;
 
   let data: WeatherData | null = null;
 
   if (forecast) {
-    // Build hourly slice — prefer OWM 3-h forecast, fall back to Open-Meteo hourly
-    let hourly: HourlySlice;
-
-    if (owmHourly?.list?.length) {
-      hourly = {
-        time: owmHourly.list.map(e => fmtHour(e.dt)),
-        temperature: owmHourly.list.map(e => Math.round(e.main.temp)),
-        weatherCode: owmHourly.list.map(e => owmIdToWmoCode(e.weather[0]?.id ?? 800)),
-      };
-    } else {
-      // Slice Open-Meteo hourly to the next 9 hours from now
-      const nowISO = new Date().toISOString().slice(0, 13); // "2024-01-15T14"
-      let startIdx = forecast.hourly.time.findIndex(t => t.slice(0, 13) >= nowISO);
-      if (startIdx === -1) startIdx = 0;
-      const slice = forecast.hourly.time.slice(startIdx, startIdx + 9);
-      hourly = {
-        time: slice.map(fmtOmHour),
-        temperature: forecast.hourly.temperature_2m.slice(startIdx, startIdx + 9).map(Math.round),
-        weatherCode: forecast.hourly.weathercode.slice(startIdx, startIdx + 9),
-      };
-    }
+    // Open-Meteo returns LOCAL time strings (timezone: 'auto'), so build the
+    // comparison string from the local clock — not toISOString() which is UTC.
+    const d = new Date();
+    const localHour =
+      `${d.getFullYear()}-` +
+      `${String(d.getMonth() + 1).padStart(2, '0')}-` +
+      `${String(d.getDate()).padStart(2, '0')}T` +
+      `${String(d.getHours()).padStart(2, '0')}`;
+    let startIdx = forecast.hourly.time.findIndex(t => t.slice(0, 13) >= localHour);
+    if (startIdx === -1) startIdx = 0;
+    const slice = forecast.hourly.time.slice(startIdx, startIdx + 9);
+    const hourly: HourlySlice = {
+      time: slice.map(fmtOmHour),
+      temperature: forecast.hourly.temperature_2m.slice(startIdx, startIdx + 9).map(Math.round),
+      weatherCode: forecast.hourly.weathercode.slice(startIdx, startIdx + 9),
+    };
 
     if (owm) {
       const wmoCode = owmIdToWmoCode(owm.weather[0]?.id ?? 800);
@@ -155,7 +136,7 @@ export function useWeather(lat: number, lon: number) {
   return {
     data,
     loading: forecastQuery.isLoading,
-    fetching: forecastQuery.isFetching || currentQuery.isFetching || hourlyOWMQuery.isFetching,
+    fetching: forecastQuery.isFetching || currentQuery.isFetching,
     error: forecastQuery.error
       ? forecastQuery.error instanceof Error
         ? forecastQuery.error.message
